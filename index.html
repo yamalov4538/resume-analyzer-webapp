@@ -3,6 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <!-- Запрет кэширования (GitHub Pages может кэшировать) -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>Resume Analyzer</title>
     <!-- Telegram Web App SDK -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
@@ -25,18 +29,39 @@
             font-size: 16px;
             line-height: 1.5;
             color: var(--tg-theme-hint-color, #999999);
+            margin-bottom: 24px;
+        }
+        .button {
+            background: var(--tg-theme-button-color, #40a7e3);
+            color: var(--tg-theme-button-text-color, #ffffff);
+            border: none;
+            border-radius: 12px;
+            padding: 12px 24px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: opacity 0.2s;
+            width: 100%;
+            max-width: 300px;
+        }
+        .button:hover {
+            opacity: 0.9;
+        }
+        .hidden {
+            display: none;
         }
     </style>
 </head>
 <body>
-    <div class="message">🔄 Перенаправление в бота...</div>
+    <div class="message" id="status">🔄 Подготовка...</div>
+    <button class="button hidden" id="sendBtn">✅ Активировать бота</button>
 
     <script>
         (function() {
             // 1. Инициализация Web App
             const tg = window.Telegram.WebApp;
             tg.ready();
-            tg.expand(); // растягиваем на весь экран (необязательно, но красиво)
+            tg.expand(); // опционально
 
             // 2. Извлечение payload из URL
             const urlParams = new URLSearchParams(window.location.search);
@@ -49,11 +74,18 @@
                 timestamp: Math.floor(Date.now() / 1000)
             });
 
-            // 4. Отправка данных в бота
-            tg.sendData(data);
+            // 4. Прячем сообщение о загрузке, показываем кнопку
+            document.getElementById('status').classList.add('hidden');
+            const btn = document.getElementById('sendBtn');
+            btn.classList.remove('hidden');
 
-            // 5. Закрытие Web App
-            tg.close();
+            // 5. Обработчик нажатия кнопки
+            btn.addEventListener('click', function() {
+                // Отправляем данные в бота
+                tg.sendData(data);
+                // Закрываем Mini App
+                tg.close();
+            });
         })();
     </script>
 </body>
