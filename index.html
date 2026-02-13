@@ -7,7 +7,6 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <title>Resume Analyzer</title>
-    <!-- Telegram Web App SDK (обязательно) -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
         body {
@@ -34,10 +33,7 @@
             cursor: pointer;
             width: 100%;
             max-width: 300px;
-            transition: opacity 0.2s;
-        }
-        .button:hover {
-            opacity: 0.9;
+            margin-bottom: 20px;
         }
         .debug {
             position: fixed;
@@ -46,80 +42,135 @@
             right: 0;
             background: #ffeb3b;
             color: #000;
-            padding: 8px;
-            font-size: 11px;
+            padding: 10px;
+            font-size: 12px;
             font-family: monospace;
             white-space: pre-wrap;
             word-break: break-word;
-            border-top: 1px solid #000;
-            max-height: 30vh;
+            border-top: 2px solid #000;
+            max-height: 40vh;
             overflow-y: auto;
-            z-index: 9999;
+            z-index: 10000;
+        }
+        .error {
+            background: #ff4444;
+            color: white;
         }
     </style>
 </head>
 <body>
-    <!-- Кнопка всегда видима, без скрытия -->
     <button class="button" id="sendBtn">✅ Активировать бота</button>
+    <div id="debugContainer"></div>
 
     <script>
         (function() {
-            // ========== 1. Инициализация Telegram Web App ==========
-            const tg = window.Telegram?.WebApp;
-            if (tg) {
-                tg.ready();
-                tg.expand();
-            }
+            // ========== ПЕРЕХВАТ ОШИБОК ==========
+            window.onerror = function(msg, url, line) {
+                const container = document.getElementById('debugContainer') || document.body;
+                const errDiv = document.createElement('div');
+                errDiv.className = 'debug error';
+                errDiv.innerText = '❌ ОШИБКА: ' + msg + '\nстрока: ' + line;
+                container.appendChild(errDiv);
+                return false;
+            };
 
-            // ========== 2. Получение payload из URL ==========
-            const urlParams = new URLSearchParams(window.location.search);
-            let payload = urlParams.get('startapp') || 'unknown';
-
-            // ========== 3. Формирование данных для отправки ==========
-            const data = JSON.stringify({
-                payload: payload,
-                action: 'start',
-                timestamp: Math.floor(Date.now() / 1000)
-            });
-
-            // ========== 4. Обработчик клика по кнопке ==========
-            function handleClick() {
+            try {
+                // ========== 1. Telegram SDK ==========
+                const tg = window.Telegram?.WebApp;
                 if (tg) {
-                    tg.sendData(data);
-                    tg.close();
-                } else {
-                    alert('Ошибка: Telegram Web App SDK не загружен');
+                    tg.ready();
+                    tg.expand();
                 }
-            }
 
-            // Назначаем обработчик
-            const btn = document.getElementById('sendBtn');
-            if (btn) {
-                btn.addEventListener('click', handleClick);
-            }
+                // ========== 2. ПОЛУЧЕНИЕ PAYLOAD (БЕЗОПАСНО) ==========
+                let payload = 'unknown';
+                try {
+                    const urlParams = new URLSearchParams(window.location.search);
+                    const startapp = urlParams.get('startapp');
+                    if (startapp !== null && startapp !== '') {
+                        payload = startapp;
+                    }
+                } catch (e) {
+                    console.warn('Ошибка чтения startapp:', e);
+                }
 
-            // ========== 5. Отладочная панель (видна всегда) ==========
-            function addDebug() {
-                const debugDiv = document.createElement('div');
-                debugDiv.className = 'debug';
-                let log = '';
-                log += '🔍 SDK: ' + (tg ? '✅' : '❌') + '\n';
-                log += '📦 payload: ' + payload + '\n';
-                log += '🆔 startapp: ' + (urlParams.get('startapp') || 'не указан') + '\n';
-                log += '🔘 кнопка: ' + (btn ? '✅' : '❌') + '\n';
-                log += '📤 данные: ' + data;
-                debugDiv.innerText = log;
-                document.body.appendChild(debugDiv);
-                
-                // Также в консоль
-                console.log('[Mini App]', { tg: !!tg, payload, data });
-            }
+                // ========== 3. ФОРМИРОВАНИЕ ДАННЫХ (БЕЗОПАСНО) ==========
+                let data = '{}';
+                try {
+                    data = JSON.stringify({
+                        payload: payload,
+                        action: 'start',
+                        timestamp: Math.floor(Date.now() / 1000)
+                    });
+                } catch (e) {
+                    console.error('Ошибка JSON:', e);
+                }
 
-            // Добавляем отладку после полной загрузки DOM
-            if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', addDebug);
-            } else {
-                addDebug();
+                // ========== 4. ОБРАБОТЧИК КНОПКИ ==========
+                const btn = document.getElementById('sendBtn');
+                if (btn) {
+                    btn.addEventListener('click', function() {
+                        if (tg) {
+                            try {
+                                tg.sendData(data);
+                                tg.close();
+                            } catch (e) {
+                                alert('Ошибка отправки: ' + e.message);
+                            }
+                        } else {
+                            alert('SDK не загружен');
+                        }
+                    });
+                }
+
+                // ========== 5. ОТЛАДКА (ВИДНА ВСЕГДА) ==========
+                function showDebug() {
+                    const container = document.getElementById('debugContainer');
+                    if (!container) return;
+                    
+                    const debugDiv = document.createElement('div');
+                    debugDiv.className = 'debug';
+                    
+                    let lines = [];
+                    lines.push('🔍 ТЕЛЕГРАМ SDK: ' + (tg ? '✅' : '❌'));
+                    if (tg) {
+                        lines.push('   версия: ' + (tg.version || '?'));
+                        lines.push('   платформа: ' + (tg.platform || '?'));
+                    }
+                    lines.push('📦 ПАРАМЕТРЫ URL:');
+                    lines.push('   startapp: ' + (payload || 'не указан'));
+                    lines.push('   полный URL: ' + window.location.href);
+                    lines.push('📤 ДАННЫЕ ДЛЯ ОТПРАВКИ:');
+                    lines.push('   ' + data);
+                    lines.push('🔘 КНОПКА: ' + (btn ? '✅' : '❌'));
+                    if (btn) {
+                        lines.push('   классы: ' + btn.className);
+                        lines.push('   текст: ' + btn.innerText);
+                    }
+                    
+                    debugDiv.innerText = lines.join('\n');
+                    
+                    // Очищаем и добавляем новую отладку
+                    while (container.firstChild) {
+                        container.removeChild(container.firstChild);
+                    }
+                    container.appendChild(debugDiv);
+                }
+
+                // Показываем отладку после загрузки
+                if (document.readyState === 'loading') {
+                    document.addEventListener('DOMContentLoaded', showDebug);
+                } else {
+                    showDebug();
+                }
+
+            } catch (e) {
+                // Глобальный перехват
+                const container = document.getElementById('debugContainer') || document.body;
+                const errDiv = document.createElement('div');
+                errDiv.className = 'debug error';
+                errDiv.innerText = '❌ КРИТИЧЕСКАЯ ОШИБКА:\n' + e.message + '\n' + e.stack;
+                container.appendChild(errDiv);
             }
         })();
     </script>
