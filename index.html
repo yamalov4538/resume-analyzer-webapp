@@ -1,178 +1,34 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html>
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-    <meta http-equiv="Pragma" content="no-cache">
-    <meta http-equiv="Expires" content="0">
-    <title>Resume Analyzer</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <style>
-        body {
-            margin: 0;
-            padding: 16px;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-            background: var(--tg-theme-bg-color, #ffffff);
-            color: var(--tg-theme-text-color, #000000);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-            box-sizing: border-box;
-        }
-        .button {
-            background: var(--tg-theme-button-color, #40a7e3);
-            color: var(--tg-theme-button-text-color, #ffffff);
-            border: none;
-            border-radius: 12px;
-            padding: 12px 24px;
-            font-size: 16px;
-            font-weight: 500;
-            cursor: pointer;
-            width: 100%;
-            max-width: 300px;
-            margin-bottom: 20px;
-        }
-        .debug {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            background: #ffeb3b;
-            color: #000;
-            padding: 10px;
-            font-size: 12px;
-            font-family: monospace;
-            white-space: pre-wrap;
-            word-break: break-word;
-            border-top: 2px solid #000;
-            max-height: 40vh;
-            overflow-y: auto;
-            z-index: 10000;
-        }
-        .error {
-            background: #ff4444;
-            color: white;
-        }
-    </style>
 </head>
-<body>
-    <button class="button" id="sendBtn">✅ Активировать бота</button>
-    <div id="debugContainer"></div>
+<body style="display: flex; flex-direction: column; align-items: center; padding: 20px;">
+    <button id="sendBtn" style="background: #40a7e3; color: white; border: none; border-radius: 12px; padding: 12px 24px; font-size: 16px;">
+        ✅ Активировать бота
+    </button>
+    <div id="debug" style="margin-top: 20px; padding: 10px; background: #f0f0f0; border-radius: 8px; font-family: monospace; white-space: pre-wrap;"></div>
 
     <script>
-        (function() {
-            // ========== ПЕРЕХВАТ ОШИБОК ==========
-            window.onerror = function(msg, url, line) {
-                const container = document.getElementById('debugContainer') || document.body;
-                const errDiv = document.createElement('div');
-                errDiv.className = 'debug error';
-                errDiv.innerText = '❌ ОШИБКА: ' + msg + '\nстрока: ' + line;
-                container.appendChild(errDiv);
-                return false;
-            };
+        // 1. Инициализация
+        const tg = Telegram.WebApp;
+        tg.ready();
 
-            try {
-                // ========== 1. Telegram SDK ==========
-                const tg = window.Telegram?.WebApp;
-                if (tg) {
-                    tg.ready();
-                    tg.expand();
-                }
+        // 2. Получаем параметр startapp
+        const urlParams = new URLSearchParams(window.location.search);
+        const payload = urlParams.get('startapp') || 'unknown';
 
-                // ========== 2. ПОЛУЧЕНИЕ PAYLOAD (БЕЗОПАСНО) ==========
-                let payload = 'unknown';
-                try {
-                    const urlParams = new URLSearchParams(window.location.search);
-                    const startapp = urlParams.get('startapp');
-                    if (startapp !== null && startapp !== '') {
-                        payload = startapp;
-                    }
-                } catch (e) {
-                    console.warn('Ошибка чтения startapp:', e);
-                }
+        // 3. Показываем отладку
+        document.getElementById('debug').innerText = 'payload: ' + payload;
 
-                // ========== 3. ФОРМИРОВАНИЕ ДАННЫХ (БЕЗОПАСНО) ==========
-                let data = '{}';
-                try {
-                    data = JSON.stringify({
-                        payload: payload,
-                        action: 'start',
-                        timestamp: Math.floor(Date.now() / 1000)
-                    });
-                } catch (e) {
-                    console.error('Ошибка JSON:', e);
-                }
-
-                // ========== 4. ОБРАБОТЧИК КНОПКИ ==========
-                const btn = document.getElementById('sendBtn');
-                if (btn) {
-                    btn.addEventListener('click', function() {
-                        if (tg) {
-                            try {
-                                tg.sendData(data);
-                                tg.close();
-                            } catch (e) {
-                                alert('Ошибка отправки: ' + e.message);
-                            }
-                        } else {
-                            alert('SDK не загружен');
-                        }
-                    });
-                }
-
-                // ========== 5. ОТЛАДКА (ВИДНА ВСЕГДА) ==========
-                function showDebug() {
-                    const container = document.getElementById('debugContainer');
-                    if (!container) return;
-                    
-                    const debugDiv = document.createElement('div');
-                    debugDiv.className = 'debug';
-                    
-                    let lines = [];
-                    lines.push('🔍 ТЕЛЕГРАМ SDK: ' + (tg ? '✅' : '❌'));
-                    if (tg) {
-                        lines.push('   версия: ' + (tg.version || '?'));
-                        lines.push('   платформа: ' + (tg.platform || '?'));
-                    }
-                    lines.push('📦 ПАРАМЕТРЫ URL:');
-                    lines.push('   startapp: ' + (payload || 'не указан'));
-                    lines.push('   полный URL: ' + window.location.href);
-                    lines.push('📤 ДАННЫЕ ДЛЯ ОТПРАВКИ:');
-                    lines.push('   ' + data);
-                    lines.push('🔘 КНОПКА: ' + (btn ? '✅' : '❌'));
-                    if (btn) {
-                        lines.push('   классы: ' + btn.className);
-                        lines.push('   текст: ' + btn.innerText);
-                    }
-                    
-                    debugDiv.innerText = lines.join('\n');
-                    
-                    // Очищаем и добавляем новую отладку
-                    while (container.firstChild) {
-                        container.removeChild(container.firstChild);
-                    }
-                    container.appendChild(debugDiv);
-                }
-
-                // Показываем отладку после загрузки
-                if (document.readyState === 'loading') {
-                    document.addEventListener('DOMContentLoaded', showDebug);
-                } else {
-                    showDebug();
-                }
-
-            } catch (e) {
-                // Глобальный перехват
-                const container = document.getElementById('debugContainer') || document.body;
-                const errDiv = document.createElement('div');
-                errDiv.className = 'debug error';
-                errDiv.innerText = '❌ КРИТИЧЕСКАЯ ОШИБКА:\n' + e.message + '\n' + e.stack;
-                container.appendChild(errDiv);
-            }
-        })();
+        // 4. Отправка при клике
+        document.getElementById('sendBtn').onclick = function() {
+            const data = JSON.stringify({ payload: payload, action: 'start' });
+            tg.sendData(data);
+            tg.close();
+        };
     </script>
 </body>
 </html>
