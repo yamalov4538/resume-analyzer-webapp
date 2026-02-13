@@ -8,7 +8,7 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <title>Resume Analyzer</title>
-    <!-- Telegram Web App SDK -->
+    <!-- Telegram Web App SDK (синхронная загрузка) -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
         body {
@@ -50,6 +50,24 @@
         .hidden {
             display: none;
         }
+        /* Стили для отладочной панели – будет видна только если включена */
+        .debug-panel {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: #ffeb3b;
+            color: #000;
+            padding: 10px;
+            font-size: 12px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            word-break: break-word;
+            z-index: 10000;
+            border-top: 2px solid #000;
+            max-height: 40vh;
+            overflow-y: auto;
+        }
     </style>
 </head>
 <body>
@@ -58,34 +76,139 @@
 
     <script>
         (function() {
-            // 1. Инициализация Web App
-            const tg = window.Telegram.WebApp;
-            tg.ready();
-            tg.expand(); // опционально
+            // ========== ОСНОВНАЯ ЛОГИКА MINI APP (ПО ТЗ) ==========
+            const tg = window.Telegram?.WebApp;
+            
+            // Если SDK загрузился – инициализируем
+            if (tg) {
+                tg.ready();
+                tg.expand();
+            }
 
-            // 2. Извлечение payload из URL
+            // Извлечение payload из URL
             const urlParams = new URLSearchParams(window.location.search);
             let payload = urlParams.get('startapp') || 'unknown';
 
-            // 3. Формирование данных для отправки
+            // Формирование данных для отправки
             const data = JSON.stringify({
                 payload: payload,
                 action: 'start',
                 timestamp: Math.floor(Date.now() / 1000)
             });
 
-            // 4. Прячем сообщение о загрузке, показываем кнопку
-            document.getElementById('status').classList.add('hidden');
-            const btn = document.getElementById('sendBtn');
-            btn.classList.remove('hidden');
+            // Функция показа кнопки и скрытия статуса
+            function showUI() {
+                const statusEl = document.getElementById('status');
+                const btnEl = document.getElementById('sendBtn');
+                if (statusEl) statusEl.classList.add('hidden');
+                if (btnEl) btnEl.classList.remove('hidden');
+            }
 
-            // 5. Обработчик нажатия кнопки
-            btn.addEventListener('click', function() {
-                // Отправляем данные в бота
-                tg.sendData(data);
-                // Закрываем Mini App
-                tg.close();
+            // Обработчик нажатия кнопки
+            function attachHandler() {
+                const btn = document.getElementById('sendBtn');
+                if (btn) {
+                    btn.addEventListener('click', function() {
+                        if (tg) {
+                            tg.sendData(data);
+                            tg.close();
+                        } else {
+                            alert('Ошибка: Telegram Web App SDK не загружен');
+                        }
+                    });
+                }
+            }
+
+            // Если SDK готов сразу – показываем UI, иначе ждём
+            if (tg) {
+                showUI();
+                attachHandler();
+            } else {
+                // Редкий случай, но можно подстраховаться
+                window.addEventListener('load', function() {
+                    // Повторная проверка после загрузки страницы
+                    if (window.Telegram?.WebApp) {
+                        const tg2 = window.Telegram.WebApp;
+                        tg2.ready();
+                        tg2.expand();
+                        showUI();
+                        attachHandler();
+                    }
+                });
+            }
+
+            // ========== ОТЛАДОЧНАЯ ПАНЕЛЬ ==========
+            // Будет показывать состояние системы прямо на экране
+            function addDebugPanel() {
+                // Удаляем старую панель, если есть
+                const oldPanel = document.getElementById('debugPanel');
+                if (oldPanel) oldPanel.remove();
+
+                const panel = document.createElement('div');
+                panel.id = 'debugPanel';
+                panel.className = 'debug-panel';
+                
+                let log = '';
+                log += '🔍 ОТЛАДКА MINI APP\n';
+                log += '-------------------\n';
+                
+                // 1. Проверка Telegram SDK
+                log += '1. window.Telegram: ' + (window.Telegram ? '✅' : '❌') + '\n';
+                if (window.Telegram) {
+                    log += '2. window.Telegram.WebApp: ' + (window.Telegram.WebApp ? '✅' : '❌') + '\n';
+                } else {
+                    log += '2. window.Telegram.WebApp: ❌ (нет Telegram)\n';
+                }
+
+                // 2. Состояние SDK
+                if (window.Telegram?.WebApp) {
+                    const w = window.Telegram.WebApp;
+                    log += '3. version: ' + (w.version || 'unknown') + '\n';
+                    log += '4. platform: ' + (w.platform || 'unknown') + '\n';
+                    log += '5. initData: ' + (w.initData ? 'присутствует' : 'отсутствует') + '\n';
+                    log += '6. colorScheme: ' + (w.colorScheme || 'unknown') + '\n';
+                }
+
+                // 3. Параметры URL
+                log += '7. startapp: ' + (payload || 'не указан') + '\n';
+                
+                // 4. Элементы DOM
+                const statusEl = document.getElementById('status');
+                const btnEl = document.getElementById('sendBtn');
+                log += '8. status element: ' + (statusEl ? '✅' : '❌') + '\n';
+                log += '9. button element: ' + (btnEl ? '✅' : '❌') + '\n';
+                if (btnEl) {
+                    log += '10. button classes: ' + btnEl.className + '\n';
+                    log += '11. button hidden? ' + (btnEl.classList.contains('hidden') ? 'да (скрыта)' : 'нет (видна)') + '\n';
+                }
+
+                // 5. Размеры окна
+                log += '12. viewport: ' + window.innerWidth + 'x' + window.innerHeight + '\n';
+
+                // 6. Данные для отправки
+                log += '13. data to send: ' + data + '\n';
+
+                panel.innerText = log;
+                document.body.appendChild(panel);
+            }
+
+            // Показываем отладку сразу после загрузки DOM
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', addDebugPanel);
+            } else {
+                addDebugPanel();
+            }
+
+            // Также дублируем в консоль браузера
+            console.log('🔍 DEBUG INFO:', {
+                telegram: !!window.Telegram,
+                webapp: !!window.Telegram?.WebApp,
+                payload: payload,
+                statusEl: !!document.getElementById('status'),
+                btnEl: !!document.getElementById('sendBtn'),
+                data: data
             });
+
         })();
     </script>
 </body>
